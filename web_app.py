@@ -1,4 +1,5 @@
 from typing import List, Dict
+import sys
 
 import os
 import csv
@@ -8,7 +9,7 @@ import threading
 import time
 
 import cv2
-from flask import Flask, render_template, Response, request
+from flask import Flask, render_template, Response
 
 from config import CONFIG
 from app.pipeline import CampusSafetyPipeline
@@ -18,7 +19,7 @@ app = Flask(__name__)
 # Single shared pipeline instance for the campus camera
 pipeline = CampusSafetyPipeline()
 
-# Global variables to safely share the current frame with web clients
+# Global variable to safely share the current frame with web clients
 latest_frame = None
 latest_frame_lock = threading.Lock()
 
@@ -201,13 +202,13 @@ def dashboard():
 
 def _shutdown_server() -> None:
     """
-    Ask the Werkzeug development server to shut down.
+    Shut down the server process.
+
+    ``werkzeug.server.shutdown`` was removed in Werkzeug 2.1, so we use
+    ``sys.exit`` which raises SystemExit and is caught by the dev server's
+    signal handler, cleanly stopping it.
     """
-    func = request.environ.get("werkzeug.server.shutdown")
-    if func is None:
-        # Not running with Werkzeug (e.g., production WSGI); just return.
-        return
-    func()
+    sys.exit(0)
 
 
 @app.route("/start_camera", methods=["POST"])
