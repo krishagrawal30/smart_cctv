@@ -3,6 +3,7 @@ import time
 from typing import Generator, Tuple, Optional, Union
 
 import cv2
+import numpy as np
 
 from config import CONFIG
 
@@ -21,17 +22,19 @@ class CampusCameraStream:
         
         # Reverting to simplest initialization for maximum stability
         # Force DirectShow on Windows to avoid MSMF error -1072873821
-        if isinstance(self.source, int) or (isinstance(self.source, str) and self.source.isdigit()):
+        is_device_idx = isinstance(self.source, int) or (isinstance(self.source, str) and str(self.source).isdigit())
+        if is_device_idx:
             self.cap = cv2.VideoCapture(int(self.source), cv2.CAP_DSHOW)
+            if self.cap.isOpened():
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         else:
             self.cap = cv2.VideoCapture(self.source)
             
         if not self.cap.isOpened():
             print(f"[CampusCameraStream] WARNING: Unable to open campus camera source={self.source}")
 
-
-
-        self.last_frame: Optional[object] = None
+        self.last_frame: Optional[np.ndarray] = None
         self.success: bool = False
         self.new_frame_ready: bool = False  # Track when a FRESH frame arrives
         self.running: bool = True
@@ -57,7 +60,7 @@ class CampusCameraStream:
             else:
                 time.sleep(0.1)
 
-    def frames(self) -> Generator[Tuple[bool, Optional[object]], None, None]:
+    def frames(self) -> Generator[Tuple[bool, Optional[np.ndarray]], None, None]:
         """
         Yield (success, frame) ONLY when a new frame is ready.
         This prevents the pipeline from processing the same frame 100x slower.
@@ -86,5 +89,8 @@ class CampusCameraStream:
         if self.cap is not None:
             self.cap.release()
             self.cap = None
+        with self.lock:
+            self.last_frame = None
+            self.new_frame_ready = False
 
 

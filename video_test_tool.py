@@ -14,13 +14,14 @@ import numpy as np
 import time
 
 from app.detectors.fight_detector import FightDetector
+from app.detectors.weapon_detector import WeaponDetector
 from app.risk.risk_engine import RiskEngine
-from app.utils.drawing import draw_risk_overlay
+from app.utils.drawing import draw_weapon_boxes, draw_risk_overlay
 
 
 def run_video_test(source):
     """
-    Run fight detection on a video source and display annotated output.
+    Run fight and weapon detection on a video source and display annotated output.
     """
     # If source is a digit string, treat as camera index
     if isinstance(source, str) and source.isdigit():
@@ -31,14 +32,18 @@ def run_video_test(source):
         print(f"[ERROR] Cannot open video source: {source}")
         return
 
-    detector = FightDetector()
+    fight_detector = FightDetector()
+    weapon_detector = WeaponDetector()
     risk_engine = RiskEngine()
     fps = cap.get(cv2.CAP_PROP_FPS) or 20
-    frame_delay = int(1000 / fps)
+    if fps <= 0 or np.isnan(fps):
+        fps = 20
+    frame_delay = max(1, int(1000 / fps))
 
     print(f"[VideoTest] Source: {source}")
-    print(f"[VideoTest] Fight threshold: {detector.prob_threshold}")
-    print(f"[VideoTest] Smoothing window: {detector.SMOOTHING_WINDOW}")
+    print(f"[VideoTest] Fight threshold: {fight_detector.prob_threshold}")
+    print(f"[VideoTest] Weapon threshold: {weapon_detector.conf_threshold}")
+    print(f"[VideoTest] Smoothing window: {fight_detector.SMOOTHING_WINDOW}")
     print("[VideoTest] Press 'q' to quit, 'r' to reset buffers\n")
 
     frame_idx = 0
@@ -47,19 +52,25 @@ def run_video_test(source):
         if not ret:
             # Loop video for continuous testing
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            detector.reset()
+            fight_detector.reset()
+            risk_engine.reset()
+            frame_idx = 0
             print("[VideoTest] --- Video looped, buffers reset ---")
             continue
 
         frame_idx += 1
-        fight_prob = detector.predict_fight(frame)
+        video_time = frame_idx / fps
+        fight_prob = fight_detector.predict_fight(frame)
+        weapon_dets = weapon_detector.detect_weapons(frame, fight_prob=fight_prob)
 
         risk = risk_engine.update_and_evaluate(
             fight_prob=fight_prob,
-            weapon_detections=[],
+            weapon_detections=weapon_dets,
+            current_time=video_time,
         )
 
         annotated = frame.copy()
+        draw_weapon_boxes(annotated, weapon_dets)
         draw_risk_overlay(annotated, risk, "VIDEO TEST")
 
         # Extra debug info on frame

@@ -160,8 +160,13 @@ class CampusSafetyPipeline:
     def stop(self) -> None:
         """Stop/Pause monitoring."""
         if self._is_running:
-            self.camera.release()
             self._is_running = False
+            if self._worker_thread is not None and self._worker_thread.is_alive():
+                self._worker_thread.join(timeout=1.0)
+                self._worker_thread = None
+            if self.camera is not None:
+                self.camera.release()
+                self.camera = None
             self._pending_event = None
 
     def is_running(self) -> bool:
@@ -211,11 +216,6 @@ class CampusSafetyPipeline:
                     self._last_weapon_dets = weapon_dets
                     fight_prob = smoothed_fight_prob  # Use smoothed for risk evaluation to avoid flickers
 
-                # Debug: log fight probability periodically
-                if self._frame_count % 30 == 0:
-                    print(f"[Pipeline DEBUG] frame={self._frame_count} fight_prob={fight_prob:.4f} weapons={len(weapon_dets)}")
-
-
                 # 2. SINGLE risk evaluation combining both detectors
                 risk = self._compute_risk(weapon_dets, fight_prob)
 
@@ -228,5 +228,5 @@ class CampusSafetyPipeline:
                 yield True, annotated, risk
 
     def release(self) -> None:
-        self._is_running = False
-        self.camera.release()
+        self.stop()
+

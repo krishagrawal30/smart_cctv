@@ -12,8 +12,6 @@ CONFIG = {
         "location_name": "AIML corridor 1st floor",
         "frame_width": 640,
         "frame_height": 480,
-
-
         "fps": 20,
     },
     "detection": {

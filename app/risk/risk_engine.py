@@ -34,12 +34,17 @@ class RiskEngine:
         self.min_fight_duration = cfg["min_fight_duration_sec"]
         self._fight_start_time: Optional[float] = None
 
+    def reset(self) -> None:
+        """Reset internal temporal tracking states."""
+        self._fight_start_time = None
+
     def update_and_evaluate(
         self,
         fight_prob: float,
         weapon_detections: List[Dict[str, Any]],
+        current_time: Optional[float] = None,
     ) -> RiskResult:
-        now = time.time()
+        now = current_time if current_time is not None else time.time()
         num_weapons = len(weapon_detections)
         reasons: List[str] = []
 
@@ -60,18 +65,18 @@ class RiskEngine:
             level = RiskLevel.NO_RISK
         elif has_weapon and has_fight:
             level = RiskLevel.CRITICAL
-            labels = ", ".join(set(d["label"] for d in weapon_detections))
-            reasons.append(f"⚠️ CRITICAL: Combat + {labels} Detection in campus camera")
+            labels = ", ".join(sorted(set(d["label"] for d in weapon_detections)))
+            reasons.append(f"⚠️ CRITICAL: Physical altercation + {labels} detected on campus feed")
         elif has_weapon:
             level = RiskLevel.HIGH_RISK
-            labels = ", ".join(set(d["label"] for d in weapon_detections))
-            reasons.append(f"Suspicious object detected ({labels}) — Monitor closely")
+            labels = ", ".join(sorted(set(d["label"] for d in weapon_detections)))
+            reasons.append(f"Suspicious weapon detected ({labels}) — Monitor closely")
         elif has_long_fight:
             level = RiskLevel.CRITICAL
-            reasons.append("Prolonged physical violence (MMA/Fighting) — Escalated to Critical")
+            reasons.append(f"Prolonged physical altercation (>{self.min_fight_duration:.1f}s) — Escalated to Critical")
         else:
             level = RiskLevel.MEDIUM_RISK
-            reasons.append("Active physical violence (MMA/Fighting) detected")
+            reasons.append("Active physical altercation / violence detected")
 
         if has_fight:
             reasons.append(f"fight_prob={fight_prob:.2f}")

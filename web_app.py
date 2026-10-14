@@ -50,7 +50,8 @@ def pipeline_thread():
 
 
 
-# Start the background thread immediately
+# Start pipeline and background processing thread
+pipeline.start()
 thread = threading.Thread(target=pipeline_thread, daemon=True)
 thread.start()
 

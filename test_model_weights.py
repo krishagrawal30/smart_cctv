@@ -1,26 +1,38 @@
-import torch
+import os
+import numpy as np
 
-def test_model():
-    model = torch.jit.load("models/violence_cnn_lstm.pt", map_location="cpu")
-    model.eval()
-    
-    with torch.no_grad():
-        zeros = torch.zeros(1, 30, 3, 224, 224)
-        prob_zeros = torch.sigmoid(model(zeros)).item()
-        
-        ones = torch.ones(1, 30, 3, 224, 224)
-        prob_ones = torch.sigmoid(model(ones)).item()
-        
-        rand1 = torch.rand(1, 30, 3, 224, 224)
-        prob_rand1 = torch.sigmoid(model(rand1)).item()
-        
-        rand2 = torch.rand(1, 30, 3, 224, 224) * 10
-        prob_rand2 = torch.sigmoid(model(rand2)).item()
-        
-    print(f"Zeros prob: {prob_zeros:.4f}")
-    print(f"Ones prob:  {prob_ones:.4f}")
-    print(f"Rand1 prob: {prob_rand1:.4f}")
-    print(f"Rand2 prob: {prob_rand2:.4f}")
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
+
+
+def test_models():
+    if YOLO is None:
+        print("SKIP: ultralytics not installed. Install ultralytics to run this test.")
+        return
+
+    models = [
+        ("Violence YOLO", "models/violence_yolo.pt"),
+        ("Weapon YOLO", "models/weapon_yolo.pt"),
+    ]
+
+    dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    for name, path in models:
+        print(f"\n--- Testing {name} ({path}) ---")
+        if not os.path.exists(path):
+            print(f"SKIP: Model file not found: {path}")
+            continue
+
+        model = YOLO(path)
+        print(f"Task: {model.task}")
+        print(f"Classes: {model.names}")
+
+        # Run test inference on dummy frame
+        results = model.predict(source=dummy_frame, verbose=False)
+        print(f"Inference output: {len(results)} result container(s) returned [PASS]")
+
 
 if __name__ == "__main__":
-    test_model()
+    test_models()

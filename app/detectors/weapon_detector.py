@@ -26,13 +26,23 @@ class WeaponDetector:
     CONFIRM_WINDOW = 6         # Lowered for better responsiveness
     CONFIRM_MIN_HITS = 2       # Base hits required
  
-    # Minimum bounding box area (pixels) — lower this to 800 to catch smaller objects
-    MIN_BBOX_AREA = 800       # Previously 1500
+    # Minimum bounding box area (pixels)
+    MIN_BBOX_AREA = 800
     
-    # Maximum bounding box area (pixels) — exclude boxes larger than 15% of a 640x480 frame
-    # Handguns/small weapons are almost never larger than this.
-    # We reduced this from 30% to 15% to stop big moving bodies from triggering weapons.
-    MAX_BBOX_AREA = 640 * 480 * 0.15
+    # Maximum bounding box fraction of total frame area (exclude person-sized boxes)
+    MAX_BBOX_FRACTION = 0.20
+
+    @staticmethod
+    def _weapon_category(label: str) -> str:
+        """Map class names to high-level weapon categories for consistent tracking."""
+        lbl = label.lower()
+        if any(k in lbl for k in ["knife", "blade", "dagger", "sharp", "machete", "sword"]):
+            return "edged"
+        if any(k in lbl for k in ["gun", "pistol", "rifle", "handgun", "firearm", "revolver"]):
+            return "firearm"
+        if "grenade" in lbl:
+            return "explosive"
+        return "weapon"
 
     def __init__(self) -> None:
         self.conf_threshold = CONFIG["detection"]["weapon_conf_threshold"]
@@ -85,6 +95,8 @@ class WeaponDetector:
             return []
 
         detections: List[Dict[str, Any]] = []
+        frame_h, frame_w = frame.shape[:2] if hasattr(frame, "shape") and len(frame.shape) >= 2 else (480, 640)
+        max_bbox_area = frame_h * frame_w * self.MAX_BBOX_FRACTION
 
         for r in results:
             boxes = r.boxes
@@ -97,37 +109,31 @@ class WeaponDetector:
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 bbox_area = (x2 - x1) * (y2 - y1)
 
-                # DEBUG: Log ALL raw detections so we can see what the model outputs
-                print(f"[WeaponDetector RAW] cls={cls_id} label='{label}' conf={conf:.3f} area={bbox_area:.0f}")
-
-                # Filter by weapon-like labels
+                # Filter by weapon-like labels (matches all trained model classes including Grenade)
                 weapon_keywords = ["gun", "weapon", "pistol", "rifle", "knife",
                                    "dagger", "sharp", "handgun", "blade",
-                                   "machete", "sword", "firearm", "revolver"]
+                                   "machete", "sword", "firearm", "revolver", "grenade"]
                 
                 if not any(k in label.lower() for k in weapon_keywords):
                     continue
 
-                # Filter by bounding box area (avoid person-sized "weapons")
+                # Filter by bounding box area (avoid person-sized "weapons" or microscopic noise)
                 if bbox_area < self.MIN_BBOX_AREA:
-                    print(f"[WeaponDetector] Skipped {label} — bbox too small ({bbox_area:.0f} < {self.MIN_BBOX_AREA})")
                     continue
                 
-                # Apply MAX_BBOX_AREA to prevent wrestling bodies from triggering detections.
-                if bbox_area > self.MAX_BBOX_AREA:
-                    print(f"[WeaponDetector] Skipped {label} — {label} cannot be this large ({bbox_area:.0f} > {self.MAX_BBOX_AREA})")
+                if bbox_area > max_bbox_area:
                     continue
 
-                # Dynamic thresholding based on fight probability!
-                # Limbs mimicking weapons is a known issue during fights.
-                # Threshold for suppression lowered from 0.15 to 0.05 to be extra cautious.
+                # Calibrated dynamic thresholding:
+                # When fight probability is high, increase required confidence moderately
+                # to prevent flailing limbs from generating false weapon alerts.
                 dynamic_conf = current_conf
-                if fight_prob > 0.05:
-                    # Require extremely high confidence for ANY weapon during ANY suspected fighting
-                    dynamic_conf = max(current_conf, 0.85)
+                if fight_prob >= 0.50:
+                    dynamic_conf = max(current_conf, 0.70)
+                elif fight_prob >= 0.20:
+                    dynamic_conf = max(current_conf, 0.60)
 
                 if conf < dynamic_conf:
-                    print(f"[WeaponDetector] Skipped {label} — conf {conf:.2f} < {dynamic_conf:.2f} (fight_prob={fight_prob:.2f})")
                     continue
 
                 detections.append(
@@ -144,39 +150,30 @@ class WeaponDetector:
         """
         Run YOLOv8 on a BGR frame with multi-frame confirmation.
 
-        A weapon is only reported if it has been detected in at least
-        CONFIRM_MIN_HITS of the last CONFIRM_WINDOW frames.
-        This eliminates single-frame false positives from fights.
+        A weapon is only reported if it has been detected across sufficient
+        recent frames within CONFIRM_WINDOW to filter single-frame artifacts.
         """
         raw_dets = self._raw_detect(frame, fight_prob=fight_prob)
         self._detection_history.append(raw_dets)
 
-        # Label-Specific Stability Rules:
-        # - Knife: 3 hits (Increased from 2 for better stability during motion)
-        # - Others (Gun/Pistol): 4 hits
-        
         def get_required_hits(label: str) -> int:
-            if "knife" in label.lower() or "blade" in label.lower():
-                # If fighting even slightly, require max confirmation
-                if fight_prob > 0.05:
-                    return self.CONFIRM_WINDOW
-                return 3
-            
-            # If fighting even slightly, require max confirmation for handguns/rifles
-            if fight_prob > 0.05:
-                return self.CONFIRM_WINDOW
-                
-            return 4
+            cat = self._weapon_category(label)
+            if fight_prob >= 0.50:
+                return min(self.CONFIRM_WINDOW, 4)
+            if cat == "edged":
+                return 2
+            return 3
 
-        # Process each current detection against its specific history requirement
+        # Process each current detection against its category history requirement
         final_dets = []
         for d in raw_dets:
             label = d["label"]
             req = get_required_hits(label)
+            cat = self._weapon_category(label)
             
-            # Count how many of the last N frames had THIS specific label (or similar)
+            # Count how many of the recent frames had a weapon in the same category
             hits = sum(1 for frame_dets in self._detection_history 
-                       if any(label.lower() in fd["label"].lower() or fd["label"].lower() in label.lower() for fd in frame_dets))
+                       if any(self._weapon_category(fd["label"]) == cat for fd in frame_dets))
             
             if hits >= req:
                 final_dets.append(d)
@@ -192,8 +189,8 @@ class WeaponDetector:
             # Do NOT persist gun/rifle detections if a fight is happening, to let false flags drop instantly
             persistence_allowed = True
             if self._last_valid_dets and fight_prob > 0.15:
-                 if any(any(k in d["label"].lower() for k in ["gun", "rifle", "pistol", "firearm"]) for d in self._last_valid_dets):
-                      persistence_allowed = False
+                if any(any(k in d["label"].lower() for k in ["gun", "rifle", "pistol", "firearm"]) for d in self._last_valid_dets):
+                    persistence_allowed = False
 
             if persistence_allowed and confirm_frames >= 3 and self._last_valid_dets:
                 print(f"[WeaponDetector PERSISTED] Showing last seen {len(self._last_valid_dets)} box(es) — still confirmed ({confirm_frames} total hits)")
@@ -201,5 +198,5 @@ class WeaponDetector:
             else:
                 self._last_valid_dets = []
                 if raw_dets:
-                     print(f"[WeaponDetector REJECTED] {len(raw_dets)} detection(s) — failed hit requirements")
+                    print(f"[WeaponDetector REJECTED] {len(raw_dets)} detection(s) — failed hit requirements")
                 return []

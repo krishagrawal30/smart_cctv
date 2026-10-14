@@ -11,16 +11,18 @@ def main() -> None:
     Press 'q' to quit.
     """
     pipeline = CampusSafetyPipeline()
+    pipeline.start()
     try:
         for ok, frame, risk in pipeline.frames():
             if not ok or frame is None:
-                print("[main] No frame from campus camera, exiting.")
-                break
+                # Brief wait if stream is initializing
+                continue
 
             cv2.imshow("Campus Safety Monitor", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
+        pipeline.stop()
         pipeline.release()
         cv2.destroyAllWindows()
 
