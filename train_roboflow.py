@@ -9,9 +9,9 @@ from ultralytics import YOLO
 ROBOFLOW_API_KEY = "YOUR_ROBOFLOW_API_KEY"
 
 # 2. Get the workspace and project name from the dataset URL. 
-# For example, if the URL is: https://universe.roboflow.com/some-workspace/violence-detection-xyz
-WORKSPACE_NAME = "some-workspace"
-PROJECT_NAME = "violence-detection-xyz"
+# For example, if the URL is: https://universe.roboflow.com/security-datasets/weapon-detection-security
+WORKSPACE_NAME = "security-datasets"
+PROJECT_NAME = "weapon-detection-security"
 VERSION_NUMBER = 1 # Usually 1 unless specified 
 
 def train_custom_model():
