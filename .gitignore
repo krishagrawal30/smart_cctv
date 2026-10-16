@@ -25,3 +25,15 @@ test_out.txt
 *.mkv
 *.avi
 *.mov
+
+# Microsoft Office temporary lock files
+~$*
+~$*.docx
+~$*.doc
+
+# Report guidelines & course rubrics (local reference)
+Paper Report Guidelines.pdf
+*.pdf
+
+# Deprecated draft report (superseded by Smart_CCTV_Violence_Detection_Research_Paper_Final.docx)
+Smart_CCTV_Violence_Detection_Research_Paper.docx
