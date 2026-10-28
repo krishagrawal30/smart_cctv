@@ -17,7 +17,7 @@ It processes live camera feeds, detects threats using **two YOLO-based models**,
 ```
 STEP 0 — Load Models
         │
-        ├── weapon_yolo.pt     (YOLOv8 – weapon detection)
+        ├── weapon_yolo.pt     (YOLOv26 – weapon detection)
         └── violence_yolo.pt   (YOLOv8 – fight detection)
                 │
                 ▼
@@ -50,19 +50,19 @@ STEP 5 — Web Dashboard (Flask)
 
 ## 🧠 Models Used
 
-| Model              | Purpose                               | Type   |
-| ------------------ | ------------------------------------- | ------ |
-| `weapon_yolo.pt`   | Detect weapons (guns, knives, blades) | YOLOv8 |
-| `violence_yolo.pt` | Detect fights / violent activity      | YOLOv8 |
+| Model              | Purpose                               | Type    |
+| ------------------ | ------------------------------------- | ------- |
+| `weapon_yolo.pt`   | Detect weapons (guns, knives, blades) | YOLOv26 |
+| `violence_yolo.pt` | Detect fights / violent activity      | YOLOv8  |
 
-> Both models run on **each frame**, enabling fast real-time inference.
+> Both models run on **each frame**, enabling fast real-time inference. Weapon detection leverages **YOLOv26** with NMS-free end-to-end inference for ultra-low latency edge monitoring.
 
 ---
 
 ## 🚀 Features
 
 * 🎥 Live video streaming via Flask
-* 🔫 Weapon detection using YOLOv8
+* 🔫 Weapon detection using YOLOv26 (NMS-free, small-target aware)
 * 🥊 Violence detection using YOLOv8
 * ⚠️ Risk-level classification engine
 * 🎬 Automatic incident recording (video clips)
@@ -132,11 +132,11 @@ pip install -r requirements.txt
 
 ## 🧠 Model Training
 
-Both detections use **YOLOv8**, ensuring a unified and efficient pipeline.
+Weapon detection is powered by **YOLOv26** (fine-tuned on threat datasets with NMS-free end-to-end inference), while violence detection uses a specialized detection pipeline.
 
 ---
 
-### 🔫 Weapon Detection Training (Roboflow)
+### 🔫 Weapon Detection Training (Roboflow + YOLOv26)
 
 #### 1. Configure `train_roboflow.py`
 

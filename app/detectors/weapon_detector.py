@@ -16,8 +16,10 @@ except ImportError:
 
 class WeaponDetector:
     """
-    YOLOv8-based weapon detector for college campus cameras.
+    YOLOv26-based weapon detector for college campus cameras.
 
+    Leverages YOLOv26's native NMS-free end-to-end inference and small-target
+    awareness (STAL) to detect concealed and brandished weapons at edge camera latency.
     Includes multi-frame confirmation to prevent false positives during
     fights (e.g., fists/limbs misclassified as weapons).
     """
@@ -67,7 +69,7 @@ class WeaponDetector:
         try:
             self.model = YOLO(self.model_path)
             self.model.to(self.device)
-            print(f"[WeaponDetector] Loaded YOLO weights from {self.model_path}")
+            print(f"[WeaponDetector] Loaded YOLOv26 weights from {self.model_path}")
         except Exception as e:  # noqa: BLE001
             print(f"[WeaponDetector] Could not load YOLO model: {e}")
             self.model = None
@@ -148,7 +150,7 @@ class WeaponDetector:
 
     def detect_weapons(self, frame: np.ndarray, fight_prob: float = 0.0) -> List[Dict[str, Any]]:
         """
-        Run YOLOv8 on a BGR frame with multi-frame confirmation.
+        Run YOLOv26 on a BGR frame with multi-frame confirmation.
 
         A weapon is only reported if it has been detected across sufficient
         recent frames within CONFIRM_WINDOW to filter single-frame artifacts.

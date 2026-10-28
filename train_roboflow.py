@@ -26,11 +26,11 @@ def train_custom_model():
     yaml_path = os.path.join(dataset.location, "data.yaml")
     
     print(f"Dataset downloaded successfully to: {dataset.location}")
-    print("Initializing YOLOv8 Nano model for training...")
+    print("Initializing YOLOv26 Nano model for transfer learning...")
     
-    # Initialize a blank YOLOv8 nano model (fastest inference for CCTV)
-    # You can change to 'yolov8s.pt' for better accuracy at the cost of speed
-    model = YOLO("yolov8n.pt") 
+    # Initialize a YOLOv26 nano model with NMS-free end-to-end inference (fastest inference for CCTV)
+    # You can change to 'yolo26s.pt' for better accuracy at minimal latency cost
+    model = YOLO("yolo26n.pt") 
     
     print("Starting training process. This may take a while depending on your GPU...")
     # Train the model on the dataset
